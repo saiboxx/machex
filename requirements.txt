@@ -1,0 +1,8 @@
+numpy
+pandas
+pillow
+ffcv
+pydicom
+torch
+torchvision
+tqdm
