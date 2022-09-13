@@ -12,9 +12,10 @@ MaCheX is a composition of mutliple public chest radiography datasets. In this v
 All in all, the final dataset amounts to around 650,000 chest x-rays in 1024x1024px resolution.
 The dataset object only contains images. Labels and additional meta information is theoretically available, but not implemented for composition.
 
-For packaging MaCheX the FFCV library is used.
-Create the full dataset by executing `create_machex.py`. Don't forget to adjust the path constants at the beginning of the file.
+The full dataset can be composed by calling `python machex.py`. The respective parameters
+are adjusted in the header of the file.
+The resulting structure is organized on a per dataset basis.
+In each subfolder is a `index.json`, which points to the corresponding file and allows
+implementation of additional meta data in later stages of this project.
 
-The resulting `.beton` file can be tested für functionality with `test_machex.py`, which simply iterates over the dataset once and checks if there are images with zero standard deviation.
-
-Note: Installing FFCV can be a bit problematic, especially when running in a limited permission container environment. Please check [the FFCV github page](https://github.com/libffcv/ffcv) for extended information.
+In `dataset.py` an example PyTorch dataset structure for accessing MaCheX can be found.

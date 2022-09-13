@@ -23,7 +23,7 @@ from tqdm import tqdm
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 MACHEX_PATH: Final = '/data/core-rad/machex'
-NUM_WORKERS: Final = 224
+NUM_WORKERS: Final = 256
 
 CHEXRAY14_ROOT: Final = '/data/core-rad/chestx-ray/chex-ray14'
 CHEXPERT_ROOT: Final = '/data/core-rad/chestx-ray/CheXpert-v1.0'
@@ -53,12 +53,12 @@ class BaseParser(ABC):
     """Base class for parsing chest x-ray datasets."""
 
     def __init__(
-            self,
-            root: str,
-            target_root: str,
-            train: bool = True,
-            transforms: Optional[Compose] = None,
-            num_workers: int = 16,
+        self,
+        root: str,
+        target_root: str,
+        train: bool = True,
+        transforms: Optional[Compose] = None,
+        num_workers: int = 16,
     ) -> None:
         """Initialize base parser."""
         self.root = root
@@ -86,7 +86,6 @@ class BaseParser(ABC):
 
     def __len__(self):
         """Return length of the dataset."""
-        return 1000
         return len(self.keys)
 
     @abstractmethod
@@ -124,7 +123,7 @@ class BaseParser(ABC):
         meta_dict.update(self._get_meta_data(key))
         return {file_id: meta_dict}
 
-    def parse(self) -> None:
+    def parse(self, chunk_size: int = 64) -> None:
         """Parse the dataset."""
         index_dict = {}
 
@@ -135,10 +134,12 @@ class BaseParser(ABC):
             cur_dir = os.path.join(self.target_root, str(i).zfill(2))
             os.makedirs(cur_dir, exist_ok=True)
 
-        # Iterate over every entry in multiprocessing fashion.
+        # # Iterate over every entry in multiprocessing fashion.
         with Pool(processes=self.num_workers) as p:
             with tqdm(total=len(self), leave=False) as pbar:
-                for entry in p.imap(self._process_idx, range(0, len(self))):
+                for entry in p.imap(
+                    self._process_idx, range(0, len(self)), chunksize=chunk_size
+                ):
                     index_dict.update(entry)
                     pbar.update()
 
@@ -151,12 +152,12 @@ class Chexray14Parser(BaseParser):
     """Parser object for CheX-ray14."""
 
     def __init__(
-            self,
-            root: str,
-            target_root: str,
-            train: bool = True,
-            transforms: Optional[Compose] = None,
-            num_workers: int = 16,
+        self,
+        root: str,
+        target_root: str,
+        train: bool = True,
+        transforms: Optional[Compose] = None,
+        num_workers: int = 16,
     ) -> None:
         """Initialize Chexray14 parser."""
         super().__init__(root, target_root, train, transforms, num_workers)
@@ -188,12 +189,12 @@ class ChexpertParser(BaseParser):
     """Parser object for CheXpert."""
 
     def __init__(
-            self,
-            root: str,
-            target_root: str,
-            train: bool = True,
-            transforms: Optional[Compose] = None,
-            num_workers: int = 16,
+        self,
+        root: str,
+        target_root: str,
+        train: bool = True,
+        transforms: Optional[Compose] = None,
+        num_workers: int = 16,
     ) -> None:
         """Initialize Chexpert parser."""
         super().__init__(root, target_root, train, transforms, num_workers)
@@ -231,12 +232,12 @@ class PadChestParser(BaseParser):
     """Parser object for PadChest."""
 
     def __init__(
-            self,
-            root: str,
-            target_root: str,
-            train: bool = True,
-            transforms: Optional[Compose] = None,
-            num_workers: int = 16,
+        self,
+        root: str,
+        target_root: str,
+        train: bool = True,
+        transforms: Optional[Compose] = None,
+        num_workers: int = 16,
     ) -> None:
         """Initialize PadChest parser."""
         super().__init__(root, target_root, train, transforms, num_workers)
@@ -247,7 +248,7 @@ class PadChestParser(BaseParser):
 
         self._keys = meta_data[
             (meta_data['Projection'] == 'AP') | (meta_data['Projection'] == 'PA')
-            ]['ImageID'].tolist()
+        ]['ImageID'].tolist()
 
         # Following files throw UnidentifiedImageError.
         # As these are only a few files, they are banned.
@@ -292,12 +293,12 @@ class MIMICParser(BaseParser):
     """Parser object for MIMIC-CXR-JPG."""
 
     def __init__(
-            self,
-            root: str,
-            target_root: str,
-            train: bool = True,
-            transforms: Optional[Compose] = None,
-            num_workers: int = 16,
+        self,
+        root: str,
+        target_root: str,
+        train: bool = True,
+        transforms: Optional[Compose] = None,
+        num_workers: int = 16,
     ) -> None:
         """Initialize MIMIC-CXR-JPG parser."""
         super().__init__(root, target_root, train, transforms, num_workers)
@@ -309,18 +310,25 @@ class MIMICParser(BaseParser):
         # Filter for frontal position
         meta_data = meta_data[
             (meta_data['ViewPosition'] == 'AP') | (meta_data['ViewPosition'] == 'PA')
-            ]
+        ]
 
         # Extract path
         meta_data['dicom_id'] = meta_data['dicom_id'].astype(str)
         meta_data['subject_id'] = meta_data['subject_id'].astype(str)
         meta_data['study_id'] = meta_data['study_id'].astype(str)
 
-        paths = 'files' \
-                + '/p' + meta_data['subject_id'].str[:2] \
-                + '/p' + meta_data['subject_id'] \
-                + '/s' + meta_data['study_id'] \
-                + '/' + meta_data['dicom_id'] + '.jpg'
+        paths = (
+            'files'
+            + '/p'
+            + meta_data['subject_id'].str[:2]
+            + '/p'
+            + meta_data['subject_id']
+            + '/s'
+            + meta_data['study_id']
+            + '/'
+            + meta_data['dicom_id']
+            + '.jpg'
+        )
         self._keys = paths.tolist()
 
     @property
@@ -348,12 +356,12 @@ class VinDrCXRParser(BaseParser):
     """Parser object for VinDr-CXR."""
 
     def __init__(
-            self,
-            root: str,
-            target_root: str,
-            train: bool = True,
-            transforms: Optional[Compose] = None,
-            num_workers: int = 16,
+        self,
+        root: str,
+        target_root: str,
+        train: bool = True,
+        transforms: Optional[Compose] = None,
+        num_workers: int = 16,
     ) -> None:
         """Initialize VinDr-CXR parser."""
         super().__init__(root, target_root, train, transforms, num_workers)
@@ -391,10 +399,15 @@ class VinDrCXRParser(BaseParser):
         arr = ds.pixel_array
         arr = (arr - np.min(arr)) / (np.max(arr) - np.min(arr))
 
+        # Some images have a different mode
+        if ds.PhotometricInterpretation == 'MONOCHROME1':
+            arr = 1.0 - arr
+
         img = Image.fromarray(np.uint8(arr * 255))
         img = img.convert('RGB')
         img = TRANSFORMS(img)
         return img
+
 
 # MIMIC-CXR-JPG
 # --------------------------------------------------------------------------------------
@@ -402,12 +415,12 @@ class BraxParser(BaseParser):
     """Parser object for Brax."""
 
     def __init__(
-            self,
-            root: str,
-            target_root: str,
-            train: bool = True,
-            transforms: Optional[Compose] = None,
-            num_workers: int = 16,
+        self,
+        root: str,
+        target_root: str,
+        train: bool = True,
+        transforms: Optional[Compose] = None,
+        num_workers: int = 16,
     ) -> None:
         """Initialize Brax parser."""
         super().__init__(root, target_root, train, transforms, num_workers)
@@ -420,7 +433,7 @@ class BraxParser(BaseParser):
 
         meta_data = meta_data[
             (meta_data['ViewPosition'] == 'AP') | (meta_data['ViewPosition'] == 'PA')
-            ]
+        ]
 
         self._keys = meta_data['PngPath'].str[:-path_offset].tolist()
 
@@ -442,22 +455,23 @@ class BraxParser(BaseParser):
         """Obtain meta data for a given key."""
         return {}
 
+
 # MACHEX
 # --------------------------------------------------------------------------------------
 class MachexCompositor:
     """Class for composing MaCheX."""
 
     def __init__(
-            self,
-            target_root: str,
-            chexray14_root: Optional[str] = None,
-            chexpert_root: Optional[str] = None,
-            padchest_root: Optional[str] = None,
-            mimic_root: Optional[str] = None,
-            vindrcxr_root: Optional[str] = None,
-            brax_root: Optional[str] = None,
-            transforms: Optional[Compose] = None,
-            num_workers: int = 16,
+        self,
+        target_root: str,
+        chexray14_root: Optional[str] = None,
+        chexpert_root: Optional[str] = None,
+        padchest_root: Optional[str] = None,
+        mimic_root: Optional[str] = None,
+        vindrcxr_root: Optional[str] = None,
+        brax_root: Optional[str] = None,
+        transforms: Optional[Compose] = None,
+        num_workers: int = 16,
     ) -> None:
         """Initialize MaCheX constructor."""
         self.chexray14_root = chexray14_root
