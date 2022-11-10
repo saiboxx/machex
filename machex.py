@@ -1,15 +1,17 @@
 """Tool for creating the massive chest x-ray dataset MaCheX."""
 import json
 import os
+from pathlib import Path
 import warnings
 from abc import ABC, abstractmethod
 from multiprocessing import Pool
+import re
 from typing import (
     List,
     Final,
     Optional,
     Dict,
-    Any,
+    Any
 )
 
 import numpy as np
@@ -347,7 +349,25 @@ class MIMICParser(BaseParser):
 
     def _get_meta_data(self, key: str) -> Dict:
         """Obtain meta data for a given key."""
-        return {}
+        subject_dir = Path(key).parent
+        txt_path = self._get_path(str(subject_dir) + '.txt')
+
+        report = ''
+        if Path(txt_path).exists():
+            r = Path(txt_path).read_text()
+
+            if 'FINDINGS:' in r:
+                r = r.split('FINDINGS:')[-1]
+            else:
+                r = r.split('IMPRESSION:')[-1]
+
+            r = r.replace('IMPRESSION:', '')
+            r = r.replace('\n', '')
+            r = re.sub(' +', ' ', r)
+            r = r.strip()
+            report = r
+
+        return {'report': report}
 
 
 # VinDr-CXR
