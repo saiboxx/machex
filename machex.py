@@ -4,15 +4,10 @@ import os
 from pathlib import Path
 import warnings
 from abc import ABC, abstractmethod
+from math import isnan
 from multiprocessing import Pool
 import re
-from typing import (
-    List,
-    Final,
-    Optional,
-    Dict,
-    Any
-)
+from typing import List, Final, Optional, Dict, Any
 
 import numpy as np
 import pandas as pd
@@ -25,7 +20,7 @@ from tqdm import tqdm
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 MACHEX_PATH: Final = '/data/core-rad/machex'
-NUM_WORKERS: Final = 256
+NUM_WORKERS: Final = 224
 
 CHEXRAY14_ROOT: Final = '/data/core-rad/chestx-ray/chex-ray14'
 CHEXPERT_ROOT: Final = '/data/core-rad/chestx-ray/CheXpert-v1.0'
@@ -201,13 +196,46 @@ class ChexpertParser(BaseParser):
         """Initialize Chexpert parser."""
         super().__init__(root, target_root, train, transforms, num_workers)
         key_file = 'train.csv' if train else 'valid.csv'
-        entries = read_file(os.path.join(self.root, key_file))
+        meta_data = pd.read_csv(os.path.join(self.root, key_file))
 
-        self._keys = []
-        for e in entries:
-            path = e.split(',')[0]
-            if 'frontal' in path:
-                self._keys.append(path.replace('CheXpert-v1.0/', ''))
+        label_columns = [
+            'Enlarged Cardiomediastinum',
+            'Cardiomegaly',
+            'Lung Opacity',
+            'Lung Lesion',
+            'Edema',
+            'Consolidation',
+            'Pneumonia',
+            'Atelectasis',
+            'Pneumothorax',
+            'Pleural Effusion',
+            'Pleural Other',
+            'Fracture',
+            'Support Devices',
+        ]
+
+        self.meta_dict = {}
+        for _, row in meta_data.iterrows():
+            path = row['Path'].replace('CheXpert-v1.0/', '')
+            if 'frontal' not in path:
+                continue
+
+            label_vec = [0] * 13
+            for idx, lab in enumerate(label_columns):
+                # Map negative labels ( zeros in csv) to -1 in label vector.
+                # Map uncertainty labels ( = -1) and no mentioning to 0 in label vector.
+                # Map ones to 1 in label vector
+                if isnan(row[lab]):
+                    continue
+
+                if int(row[lab]) == 1:
+                    label_vec[idx] = 1
+                elif int(row[lab]) == 0:
+                    label_vec[idx] = -1
+
+            self.meta_dict.update({path: {'class_label': label_vec}})
+
+        self._keys = list(self.meta_dict.keys())
 
     @property
     def keys(self) -> List[str]:
@@ -225,7 +253,7 @@ class ChexpertParser(BaseParser):
 
     def _get_meta_data(self, key: str) -> Dict:
         """Obtain meta data for a given key."""
-        return {}
+        return self.meta_dict[key]
 
 
 # PadChest
