@@ -1,0 +1,9 @@
+MACHEX_PATH: machex_dataset
+NUM_WORKERS: 224
+
+CHEXRAY14_ROOT: chestx-ray/chex-ray14
+CHEXPERT_ROOT: chestx-ray/CheXpert-v1.0
+PADCHEST_ROOT: chestx-ray/PADCHEST
+MIMIC_ROOT: chestx-ray/mimic-cxr-jpg-2.0.0
+VINDRCXR_ROOT: chestx-ray/VinDr-CXR
+BRAX_ROOT: chestx-ray/brax_1.1.0

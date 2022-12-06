@@ -1,13 +1,14 @@
 """Tool for creating the massive chest x-ray dataset MaCheX."""
-import json
-import os
-from pathlib import Path
-import warnings
 from abc import ABC, abstractmethod
+import argparse
+import json
 from math import isnan
 from multiprocessing import Pool
+import os
+from pathlib import Path
 import re
 from typing import List, Final, Optional, Dict, Any
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -16,18 +17,9 @@ from PIL import ImageFile
 from pydicom import dcmread
 from torchvision.transforms import Resize, Compose, CenterCrop
 from tqdm import tqdm
+import yaml
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
-
-MACHEX_PATH: Final = '/data/core-rad/machex'
-NUM_WORKERS: Final = 224
-
-CHEXRAY14_ROOT: Final = '/data/core-rad/chestx-ray/chex-ray14'
-CHEXPERT_ROOT: Final = '/data/core-rad/chestx-ray/CheXpert-v1.0'
-PADCHEST_ROOT: Final = '/data/core-rad/chestx-ray/PADCHEST'
-MIMIC_ROOT: Final = '/data/core-rad/chestx-ray/mimic-cxr-jpg-2.0.0'
-VINDRCXR_ROOT: Final = '/data/core-rad/chestx-ray/VinDr-CXR'
-BRAX_ROOT: Final = '/data/core-rad/chestx-ray/brax_1.1.0'
 
 TRANSFORMS: Final = Compose([Resize(1024), CenterCrop(1024)])
 
@@ -112,8 +104,8 @@ class BaseParser(ABC):
         file_dir = file_id[:2]
         file_path = os.path.join(self.target_root, file_dir, file_id + '.jpg')
 
-        img = self._get_image(key)
-        img.save(file_path, quality=95)
+        #img = self._get_image(key)
+        #img.save(file_path, quality=95)
 
         meta_dict = {'path': os.path.abspath(file_path), 'key': key}
 
@@ -361,6 +353,56 @@ class MIMICParser(BaseParser):
         )
         self._keys = paths.tolist()
 
+        # Build dict for Chexpert labels
+        label_file = 'mimic-cxr-2.0.0-chexpert.csv'
+        label_data = pd.read_csv(os.path.join(root, label_file))
+        label_data['subject_id'] = label_data['subject_id'].astype(str)
+        label_data['study_id'] = label_data['study_id'].astype(str)
+        # Weird key is for easy grouping with the paths.
+        label_data['key'] = (
+            'files'
+            + '/p'
+            + label_data['subject_id'].str[:2]
+            + '/p'
+            + label_data['subject_id']
+            + '/s'
+            + label_data['study_id']
+        )
+
+        label_columns = [
+            'Enlarged Cardiomediastinum',
+            'Cardiomegaly',
+            'Lung Opacity',
+            'Lung Lesion',
+            'Edema',
+            'Consolidation',
+            'Pneumonia',
+            'Atelectasis',
+            'Pneumothorax',
+            'Pleural Effusion',
+            'Pleural Other',
+            'Fracture',
+            'Support Devices',
+        ]
+
+        self.meta_dict = {}
+        for _, row in label_data.iterrows():
+            label_vec = [0] * 13
+
+            for idx, lab in enumerate(label_columns):
+                # Map negative labels ( zeros in csv) to -1 in label vector.
+                # Map uncertainty labels ( = -1) and no mentioning to 0 in label vector.
+                # Map ones to 1 in label vector
+                if isnan(row[lab]):
+                    continue
+
+                if int(row[lab]) == 1:
+                    label_vec[idx] = 1
+                elif int(row[lab]) == 0:
+                    label_vec[idx] = -1
+
+            self.meta_dict.update({row['key']: {'class_label': label_vec}})
+
     @property
     def keys(self) -> List[str]:
         """Identifier for image files."""
@@ -377,6 +419,7 @@ class MIMICParser(BaseParser):
 
     def _get_meta_data(self, key: str) -> Dict:
         """Obtain meta data for a given key."""
+        # Get text report
         subject_dir = Path(key).parent
         txt_path = self._get_path(str(subject_dir) + '.txt')
 
@@ -395,7 +438,11 @@ class MIMICParser(BaseParser):
             r = r.strip()
             report = r
 
-        return {'report': report}
+        # Get chexpert labelling if existing
+        meta_data = self.meta_dict.get(str(subject_dir), {})
+
+        meta_data.update({'report': report})
+        return meta_data
 
 
 # VinDr-CXR
@@ -617,17 +664,27 @@ class MachexCompositor:
 
             print('----------------------------------------------------')
 
+def read_yml(filepath: str) -> Dict:
+    """Load a yml file to memory as dict."""
+    with open(filepath, 'r') as ymlfile:
+        return dict(yaml.load(ymlfile, Loader=yaml.FullLoader))
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', '-c', type=str, default='config.yml')
+    args = parser.parse_args()
+
+    cfg = read_yml(args.config)
+
     machex = MachexCompositor(
-        target_root=MACHEX_PATH,
-        chexray14_root=CHEXRAY14_ROOT,
-        chexpert_root=CHEXPERT_ROOT,
-        padchest_root=PADCHEST_ROOT,
-        mimic_root=MIMIC_ROOT,
-        vindrcxr_root=VINDRCXR_ROOT,
-        brax_root=BRAX_ROOT,
+        target_root=cfg['MACHEX_PATH'],
+        chexray14_root=cfg['CHEXRAY14_ROOT'],
+        chexpert_root=cfg['CHEXPERT_ROOT'],
+        padchest_root=cfg['PADCHEST_ROOT'],
+        mimic_root=cfg['MIMIC_ROOT'],
+        vindrcxr_root=cfg['VINDRCXR_ROOT'],
+        brax_root=cfg['BRAX_ROOT'],
         transforms=TRANSFORMS,
-        num_workers=NUM_WORKERS,
+        num_workers=cfg['NUM_WORKERS'],
     )
     machex.run()

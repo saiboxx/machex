@@ -11,7 +11,7 @@ from PIL import Image
 from torch.utils.data import Dataset, ConcatDataset
 from torchvision.transforms import Compose, ToTensor
 
-MACHEX_PATH: Final = '/data/core-rad/machex'
+MACHEX_PATH: Final = 'machex_dataset'
 
 
 class ChestXrayDataset(Dataset):

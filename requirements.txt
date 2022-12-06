@@ -5,3 +5,4 @@ pydicom
 torch
 torchvision
 tqdm
+pyyaml
