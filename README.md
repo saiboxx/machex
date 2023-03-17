@@ -86,3 +86,19 @@ Essentially, each sub-dataset is independent of the other, but has a common inte
 over the respective `index.json`. Thus, one can load a specific subset over the
 `ChestXrayDataset` object or the full MaCheX dataset with `MaCheXDataset` by providing
 correct directory paths.
+
+
+## Citation
+
+If you use the MaChex collection or code in your research, please cite our paper *Cascaded Latent Diffusion Models for High-Resolution Chest X-ray Synthesis*:
+
+```
+@inproceedings{weber2023cascaded,
+  title={Cascaded Latent Diffusion Models for High-Resolution Chest X-ray Synthesis},
+  author={Weber, Tobias and Ingrisch, Michael and Bischl, Bernd and R{\"u}gamer, David},
+  booktitle={Advances in Knowledge Discovery and Data Mining: 27th Pacific-Asia Conference, PAKDD 2023},
+  year={2023},
+  organization={Springer}
+}
+```
+
