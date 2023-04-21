@@ -1,5 +1,6 @@
 MACHEX_PATH: machex_dataset
 NUM_WORKERS: 224
+FRONTAL_ONLY: true
 
 CHEXRAY14_ROOT: chestx-ray/chex-ray14
 CHEXPERT_ROOT: chestx-ray/CheXpert-v1.0
@@ -7,3 +8,7 @@ PADCHEST_ROOT: chestx-ray/PADCHEST
 MIMIC_ROOT: chestx-ray/mimic-cxr-jpg-2.0.0
 VINDRCXR_ROOT: chestx-ray/VinDr-CXR
 BRAX_ROOT: chestx-ray/brax_1.1.0
+RSNA_ROOT: chestx-ray/kaggle-pneumonia-jpg
+OPENI_ROOT: chestx-ray/NLMCXR_png
+SIIM_ROOT: chestx-ray/SIIM_TRAIN_TEST
+OBJECTCXR_ROOT: chestx-ray/object-CXR

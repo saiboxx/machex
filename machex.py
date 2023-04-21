@@ -48,6 +48,9 @@ class BaseParser(ABC):
         train: bool = True,
         transforms: Optional[Compose] = None,
         num_workers: int = 16,
+        frontal_only: bool = True,
+        *args,
+        **kwargs
     ) -> None:
         """Initialize base parser."""
         self.root = root
@@ -55,6 +58,7 @@ class BaseParser(ABC):
         self.is_train = train
         self.transforms = transforms
         self.num_workers = num_workers
+        self.frontal_only = frontal_only
 
     @property
     @abstractmethod
@@ -140,17 +144,10 @@ class BaseParser(ABC):
 class Chexray14Parser(BaseParser):
     """Parser object for CheX-ray14."""
 
-    def __init__(
-        self,
-        root: str,
-        target_root: str,
-        train: bool = True,
-        transforms: Optional[Compose] = None,
-        num_workers: int = 16,
-    ) -> None:
+    def __init__(self, *args, **kwargs) -> None:
         """Initialize Chexray14 parser."""
-        super().__init__(root, target_root, train, transforms, num_workers)
-        key_file = 'train_val_list.txt' if train else 'test_list.txt'
+        super().__init__(*args, **kwargs)
+        key_file = 'train_val_list.txt' if self.is_train else 'test_list.txt'
         self._keys = read_file(os.path.join(self.root, key_file))
 
     @property
@@ -177,17 +174,10 @@ class Chexray14Parser(BaseParser):
 class ChexpertParser(BaseParser):
     """Parser object for CheXpert."""
 
-    def __init__(
-        self,
-        root: str,
-        target_root: str,
-        train: bool = True,
-        transforms: Optional[Compose] = None,
-        num_workers: int = 16,
-    ) -> None:
+    def __init__(self, *args, **kwargs) -> None:
         """Initialize Chexpert parser."""
-        super().__init__(root, target_root, train, transforms, num_workers)
-        key_file = 'train.csv' if train else 'valid.csv'
+        super().__init__(*args, **kwargs)
+        key_file = 'train.csv' if self.is_train else 'valid.csv'
         meta_data = pd.read_csv(os.path.join(self.root, key_file))
 
         label_columns = [
@@ -209,7 +199,7 @@ class ChexpertParser(BaseParser):
         self.meta_dict = {}
         for _, row in meta_data.iterrows():
             path = row['Path'].replace('CheXpert-v1.0/', '')
-            if 'frontal' not in path:
+            if 'frontal' not in path and self.frontal_only:
                 continue
 
             label_vec = [0] * 13
@@ -253,24 +243,19 @@ class ChexpertParser(BaseParser):
 class PadChestParser(BaseParser):
     """Parser object for PadChest."""
 
-    def __init__(
-        self,
-        root: str,
-        target_root: str,
-        train: bool = True,
-        transforms: Optional[Compose] = None,
-        num_workers: int = 16,
-    ) -> None:
+    def __init__(self, *args, **kwargs) -> None:
         """Initialize PadChest parser."""
-        super().__init__(root, target_root, train, transforms, num_workers)
+        super().__init__(*args, **kwargs)
         meta_file = 'PADCHEST_chest_x_ray_images_labels_160K_01.02.19.csv'
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            meta_data = pd.read_csv(os.path.join(root, meta_file))
+            meta_data = pd.read_csv(os.path.join(self.root, meta_file))
 
-        self._keys = meta_data[
-            (meta_data['Projection'] == 'AP') | (meta_data['Projection'] == 'PA')
-        ]['ImageID'].tolist()
+        position_filter = ['AP','AP_horizontal', 'PA']
+        if not self.frontal_only:
+            position_filter.append('L')
+        filter_idxs = meta_data['Projection'].isin(position_filter)
+        self._keys = meta_data[filter_idxs]['ImageID'].tolist()
 
         # Following files throw UnidentifiedImageError.
         # As these are only a few files, they are banned.
@@ -314,25 +299,20 @@ class PadChestParser(BaseParser):
 class MIMICParser(BaseParser):
     """Parser object for MIMIC-CXR-JPG."""
 
-    def __init__(
-        self,
-        root: str,
-        target_root: str,
-        train: bool = True,
-        transforms: Optional[Compose] = None,
-        num_workers: int = 16,
-    ) -> None:
+    def __init__(self, *args, **kwargs) -> None:
         """Initialize MIMIC-CXR-JPG parser."""
-        super().__init__(root, target_root, train, transforms, num_workers)
+        super().__init__(*args, **kwargs)
         meta_file = 'mimic-cxr-2.0.0-metadata.csv'
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            meta_data = pd.read_csv(os.path.join(root, meta_file))
+            meta_data = pd.read_csv(os.path.join(self.root, meta_file))
 
-        # Filter for frontal position
-        meta_data = meta_data[
-            (meta_data['ViewPosition'] == 'AP') | (meta_data['ViewPosition'] == 'PA')
-        ]
+        # Filter positions
+        position_filter = ['AP', 'PA']
+        if not self.frontal_only:
+            position_filter.extend(['LL', 'LATERAL'])
+        filter_idxs = meta_data['ViewPosition'].isin(position_filter)
+        meta_data = meta_data[filter_idxs]
 
         # Extract path
         meta_data['dicom_id'] = meta_data['dicom_id'].astype(str)
@@ -355,7 +335,7 @@ class MIMICParser(BaseParser):
 
         # Build dict for Chexpert labels
         label_file = 'mimic-cxr-2.0.0-chexpert.csv'
-        label_data = pd.read_csv(os.path.join(root, label_file))
+        label_data = pd.read_csv(os.path.join(self.root, label_file))
         label_data['subject_id'] = label_data['subject_id'].astype(str)
         label_data['study_id'] = label_data['study_id'].astype(str)
         # Weird key is for easy grouping with the paths.
@@ -450,18 +430,10 @@ class MIMICParser(BaseParser):
 class VinDrCXRParser(BaseParser):
     """Parser object for VinDr-CXR."""
 
-    def __init__(
-        self,
-        root: str,
-        target_root: str,
-        train: bool = True,
-        transforms: Optional[Compose] = None,
-        num_workers: int = 16,
-    ) -> None:
+    def __init__(self, *args, **kwargs) -> None:
         """Initialize VinDr-CXR parser."""
-        super().__init__(root, target_root, train, transforms, num_workers)
-        self.root = root
-        self.img_dir = os.path.join(root, 'train' if train else 'test')
+        super().__init__(*args, **kwargs)
+        self.img_dir = os.path.join(self.root, 'train' if self.is_train else 'test')
 
         self._keys = os.listdir(self.img_dir)
 
@@ -504,31 +476,26 @@ class VinDrCXRParser(BaseParser):
         return img
 
 
-# MIMIC-CXR-JPG
+# BRAX
 # --------------------------------------------------------------------------------------
 class BraxParser(BaseParser):
     """Parser object for Brax."""
 
-    def __init__(
-        self,
-        root: str,
-        target_root: str,
-        train: bool = True,
-        transforms: Optional[Compose] = None,
-        num_workers: int = 16,
-    ) -> None:
+    def __init__(self, *args, **kwargs) -> None:
         """Initialize Brax parser."""
-        super().__init__(root, target_root, train, transforms, num_workers)
+        super().__init__(*args, **kwargs)
 
         path_offset = 7
         meta_file = 'master_spreadsheet_update.csv'
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            meta_data = pd.read_csv(os.path.join(root, meta_file))
+            meta_data = pd.read_csv(os.path.join(self.root, meta_file))
 
-        meta_data = meta_data[
-            (meta_data['ViewPosition'] == 'AP') | (meta_data['ViewPosition'] == 'PA')
-        ]
+        position_filter = ['AP', 'PA']
+        if not self.frontal_only:
+            position_filter.append('L')
+        filter_idxs = meta_data['ViewPosition'].isin(position_filter)
+        meta_data = meta_data[filter_idxs]
 
         self._keys = meta_data['PngPath'].str[:-path_offset].tolist()
 
@@ -551,6 +518,126 @@ class BraxParser(BaseParser):
         return {}
 
 
+# RSNA PNEUMONIA
+# --------------------------------------------------------------------------------------
+class RSNAParser(BaseParser):
+    """Parser object for RSNA Pneumonia Detection Challenge."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        """Initialize RSNA parser."""
+        super().__init__(*args, **kwargs)
+        self.img_dir =  'stage_2_train_images_jpg' if self.is_train \
+            else 'stage_2_test_images_jpg'
+        self._keys = os.listdir(os.path.join(self.root, self.img_dir))
+
+    @property
+    def keys(self) -> List[str]:
+        """Identifier for image files."""
+        return self._keys
+
+    @property
+    def name(self) -> str:
+        """Name of the dataset."""
+        return 'RSNA'
+
+    def _get_path(self, key: str) -> str:
+        """Return file path for a given key."""
+        return os.path.join(self.root, self.img_dir, key)
+
+    def _get_meta_data(self, key: str) -> Dict:
+        """Obtain meta data for a given key."""
+        return {}
+
+
+# Open-i
+# --------------------------------------------------------------------------------------
+class OpenIParser(BaseParser):
+    """Parser object for Open-i."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        """Initialize OpenI parser."""
+        super().__init__(*args, **kwargs)
+        self._keys = os.listdir(self.root)
+
+        # Skip dataset in case of only frontal scans.
+        # The png files don't have view position metadata.
+        if self.frontal_only:
+            self._keys.clear()
+
+    @property
+    def keys(self) -> List[str]:
+        """Identifier for image files."""
+        return self._keys
+
+    @property
+    def name(self) -> str:
+        """Name of the dataset."""
+        return 'Open-i'
+
+    def _get_path(self, key: str) -> str:
+        """Return file path for a given key."""
+        return os.path.join(self.root, key)
+
+    def _get_meta_data(self, key: str) -> Dict:
+        """Obtain meta data for a given key."""
+        return {}
+
+# SIIM-ACR
+# --------------------------------------------------------------------------------------
+class SIIMParser(BaseParser):
+    """Parser object for SIIM-ACR Pneumothorax Segmentation."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        """Initialize OpenI parser."""
+        super().__init__(*args, **kwargs)
+        self.img_dir = 'dicom-images-train' if self.is_train else 'dicom-images-test'
+
+        file_paths = []
+        for root, _, files in os.walk(os.path.join(self.root, self.img_dir)):
+            for file in files:
+                if file.endswith('.dcm'):
+                    file_paths.append(os.path.join(root, file))
+        self._keys = file_paths
+
+    @property
+    def keys(self) -> List[str]:
+        """Identifier for image files."""
+        return self._keys
+
+    @property
+    def name(self) -> str:
+        """Name of the dataset."""
+        return 'SIIM-ACR'
+
+    def _get_path(self, key: str) -> str:
+        """Return file path for a given key."""
+        return key
+
+    def _get_meta_data(self, key: str) -> Dict:
+        """Obtain meta data for a given key."""
+        return {}
+
+    def _get_image(self, key: str) -> Image:
+        """Load and process an image for a given key."""
+        # Get image method needs to be overridden here, as ground truth is DICOM.
+        ds = dcmread(key)
+
+        # Fix wrong metadata to prevent warning
+        ds.BitsStored = 16
+
+        arr = ds.pixel_array
+        arr = (arr - np.min(arr)) / (np.max(arr) - np.min(arr))
+
+        # Some images have a different mode
+        if ds.PhotometricInterpretation == 'MONOCHROME1':
+            arr = 1.0 - arr
+
+        img = Image.fromarray(np.uint8(arr * 255))
+        img = img.convert('RGB')
+        img = TRANSFORMS(img)
+        return img
+
+
 # MACHEX
 # --------------------------------------------------------------------------------------
 class MachexCompositor:
@@ -565,8 +652,12 @@ class MachexCompositor:
         mimic_root: Optional[str] = None,
         vindrcxr_root: Optional[str] = None,
         brax_root: Optional[str] = None,
+        rsna_root: Optional[str] = None,
+        openi_root: Optional[str] = None,
+        siim_root: Optional[str] = None,
         transforms: Optional[Compose] = None,
         num_workers: int = 16,
+        frontal_only: bool = True,
     ) -> None:
         """Initialize MaCheX constructor."""
         self.chexray14_root = chexray14_root
@@ -575,10 +666,14 @@ class MachexCompositor:
         self.mimic_root = mimic_root
         self.vindrcxr_root = vindrcxr_root
         self.brax_root = brax_root
+        self.rsna_root = rsna_root
+        self.openi_root = openi_root
+        self.siim_root = siim_root
 
         self.target_root = target_root
         self.transforms = transforms
         self.num_workers = num_workers
+        self.frontal_only = frontal_only
 
     def _get_parser_objs(self) -> List[BaseParser]:
         """Instantiate parser objects."""
@@ -589,6 +684,7 @@ class MachexCompositor:
                 target_root=os.path.join(self.target_root, 'chex-ray14'),
                 transforms=self.transforms,
                 num_workers=self.num_workers,
+                frontal_only=self.frontal_only,
             )
             ps.append(p)
 
@@ -598,6 +694,7 @@ class MachexCompositor:
                 target_root=os.path.join(self.target_root, 'chexpert'),
                 transforms=self.transforms,
                 num_workers=self.num_workers,
+                frontal_only=self.frontal_only,
             )
             ps.append(p)
 
@@ -607,6 +704,7 @@ class MachexCompositor:
                 target_root=os.path.join(self.target_root, 'padchest'),
                 transforms=self.transforms,
                 num_workers=self.num_workers,
+                frontal_only=self.frontal_only,
             )
             ps.append(p)
 
@@ -616,6 +714,7 @@ class MachexCompositor:
                 target_root=os.path.join(self.target_root, 'mimic'),
                 transforms=self.transforms,
                 num_workers=self.num_workers,
+                frontal_only=self.frontal_only,
             )
             ps.append(p)
 
@@ -625,6 +724,7 @@ class MachexCompositor:
                 target_root=os.path.join(self.target_root, 'vindrcxr'),
                 transforms=self.transforms,
                 num_workers=self.num_workers,
+                frontal_only=self.frontal_only,
             )
             ps.append(p)
 
@@ -634,6 +734,37 @@ class MachexCompositor:
                 target_root=os.path.join(self.target_root, 'brax'),
                 transforms=self.transforms,
                 num_workers=self.num_workers,
+                frontal_only=self.frontal_only,
+            )
+            ps.append(p)
+
+        if self.rsna_root is not None:
+            p = RSNAParser(
+                root=self.rsna_root,
+                target_root=os.path.join(self.target_root, 'rsna'),
+                transforms=self.transforms,
+                num_workers=self.num_workers,
+                frontal_only=self.frontal_only,
+            )
+            ps.append(p)
+
+        if self.openi_root is not None:
+            p = OpenIParser(
+                root=self.openi_root,
+                target_root=os.path.join(self.target_root, 'openi'),
+                transforms=self.transforms,
+                num_workers=self.num_workers,
+                frontal_only=self.frontal_only,
+            )
+            ps.append(p)
+
+        if self.siim_root is not None:
+            p = OpenIParser(
+                root=self.siim_root,
+                target_root=os.path.join(self.target_root, 'siim'),
+                transforms=self.transforms,
+                num_workers=self.num_workers,
+                frontal_only=self.frontal_only,
             )
             ps.append(p)
 
@@ -656,6 +787,11 @@ class MachexCompositor:
         print('Target directory: {}'.format(self.target_root))
         print('{} workers are spawned.'.format(self.num_workers))
         os.makedirs(self.target_root, exist_ok=True)
+
+        if self.frontal_only:
+            print('The parser will only consider frontal scans.')
+        else:
+            print('The parser will consider frontal and lateral scans.')
 
         for p in ps:
             print('Parsing {:15s} with {:6d} samples.'.format(p.name, len(p)))
@@ -684,7 +820,11 @@ if __name__ == '__main__':
         mimic_root=cfg['MIMIC_ROOT'],
         vindrcxr_root=cfg['VINDRCXR_ROOT'],
         brax_root=cfg['BRAX_ROOT'],
+        rsna_root=cfg['RSNA_ROOT'],
+        openi_root=cfg['OPENI_ROOT'],
+        siim_root=cfg['SIIM_ROOT'],
         transforms=TRANSFORMS,
         num_workers=cfg['NUM_WORKERS'],
+        frontal_only=cfg['FRONTAL_ONLY']
     )
     machex.run()
