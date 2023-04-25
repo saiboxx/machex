@@ -108,8 +108,8 @@ class BaseParser(ABC):
         file_dir = file_id[:2]
         file_path = os.path.join(self.target_root, file_dir, file_id + '.jpg')
 
-        #img = self._get_image(key)
-        #img.save(file_path, quality=95)
+        img = self._get_image(key)
+        img.save(file_path, quality=95)
 
         meta_dict = {'path': os.path.abspath(file_path), 'key': key}
 
@@ -272,6 +272,10 @@ class PadChestParser(BaseParser):
             '216840111366964012373310883942009183085424538_00 - 030 - 080.png',
             '216840111366964012373310883942009118085640636_00 - 070 - 094.png',
             '216840111366964012487858717522009209140601076_00 - 032 - 109.png',
+            '216840111366964012373310883942009117084022290_00-064-025.png',
+            '216840111366964012283393834152009033102258826_00-059-087.png',
+            '216840111366964012819207061112010306085429121_04-020-102.png',
+            '216840111366964012819207061112010315104455352_04-024-184.png'
         ]
         self._keys = [k for k in self._keys if k not in veto_list]
 
@@ -557,7 +561,7 @@ class OpenIParser(BaseParser):
     def __init__(self, *args, **kwargs) -> None:
         """Initialize OpenI parser."""
         super().__init__(*args, **kwargs)
-        self._keys = os.listdir(self.root)
+        self._keys = [f for f in os.listdir(self.root) if f.endswith('.png')]
 
         # Skip dataset in case of only frontal scans.
         # The png files don't have view position metadata.
@@ -622,9 +626,6 @@ class SIIMParser(BaseParser):
         # Get image method needs to be overridden here, as ground truth is DICOM.
         ds = dcmread(key)
 
-        # Fix wrong metadata to prevent warning
-        ds.BitsStored = 16
-
         arr = ds.pixel_array
         arr = (arr - np.min(arr)) / (np.max(arr) - np.min(arr))
 
@@ -636,6 +637,36 @@ class SIIMParser(BaseParser):
         img = img.convert('RGB')
         img = TRANSFORMS(img)
         return img
+
+
+# object-CXR
+# --------------------------------------------------------------------------------------
+class ObjectCXRParser(BaseParser):
+    """Parser object for object-CXR."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        """Initialize OpenI parser."""
+        super().__init__(*args, **kwargs)
+        self.img_dir = 'train' if self.is_train else 'dev'
+        self._keys = os.listdir(os.path.join(self.root, self.img_dir))
+
+    @property
+    def keys(self) -> List[str]:
+        """Identifier for image files."""
+        return self._keys
+
+    @property
+    def name(self) -> str:
+        """Name of the dataset."""
+        return 'object-CXR'
+
+    def _get_path(self, key: str) -> str:
+        """Return file path for a given key."""
+        return os.path.join(self.root, self.img_dir, key)
+
+    def _get_meta_data(self, key: str) -> Dict:
+        """Obtain meta data for a given key."""
+        return {}
 
 
 # MACHEX
@@ -655,6 +686,7 @@ class MachexCompositor:
         rsna_root: Optional[str] = None,
         openi_root: Optional[str] = None,
         siim_root: Optional[str] = None,
+        objcxr_root: Optional[str] = None,
         transforms: Optional[Compose] = None,
         num_workers: int = 16,
         frontal_only: bool = True,
@@ -669,6 +701,7 @@ class MachexCompositor:
         self.rsna_root = rsna_root
         self.openi_root = openi_root
         self.siim_root = siim_root
+        self.objcxr_root = objcxr_root
 
         self.target_root = target_root
         self.transforms = transforms
@@ -759,9 +792,19 @@ class MachexCompositor:
             ps.append(p)
 
         if self.siim_root is not None:
-            p = OpenIParser(
+            p = SIIMParser(
                 root=self.siim_root,
                 target_root=os.path.join(self.target_root, 'siim'),
+                transforms=self.transforms,
+                num_workers=self.num_workers,
+                frontal_only=self.frontal_only,
+            )
+            ps.append(p)
+
+        if self.objcxr_root is not None:
+            p = ObjectCXRParser(
+                root=self.objcxr_root,
+                target_root=os.path.join(self.target_root, 'objcxr'),
                 transforms=self.transforms,
                 num_workers=self.num_workers,
                 frontal_only=self.frontal_only,
@@ -823,6 +866,7 @@ if __name__ == '__main__':
         rsna_root=cfg['RSNA_ROOT'],
         openi_root=cfg['OPENI_ROOT'],
         siim_root=cfg['SIIM_ROOT'],
+        objcxr_root=cfg['OBJECTCXR_ROOT'],
         transforms=TRANSFORMS,
         num_workers=cfg['NUM_WORKERS'],
         frontal_only=cfg['FRONTAL_ONLY']

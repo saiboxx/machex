@@ -11,7 +11,12 @@ MaCheX is a composition of mutliple public chest radiography datasets. In this v
 - VinDr-CXR
 - BRAX
 
-All in all, the final dataset amounts to around 650,000 chest x-rays in 1024x1024px resolution.
+All in all, the full final dataset amounts to around 930,000 chest x-rays in 
+1024x1024px resolution.
+This number includes frontal and lateral scans.
+If you wish to use frontal scans only, the collection of lateral scans can be turned
+off in the `config.yml`. The frontal-only dataset is approximately 680,000 chest X-rays
+strong.
 The dataset contains encoded images and partly labels and text-reports.
 
 ## How can I compose MaCheX?
@@ -26,13 +31,23 @@ For downloading the raw datasets please follow the below URLs:
 - [MIMIC-CXR](https://physionet.org/content/mimic-cxr-jpg/2.0.0/)
 - [VinDr-CXR](https://physionet.org/content/vindr-cxr/1.0.0/)
 - [BRAX](https://physionet.org/content/brax/1.1.0/)
+- [RSNA Pneumonia Detection Challenge](https://academictorrents.com/details/95588a735c9ae4d123f3ca408e56570409bcf2a9)
+- [OpenI](https://academictorrents.com/details/5a3a439df24931f410fac269b87b050203d9467d)
+- [SIIM-ACR](https://academictorrents.com/details/6ef7c6d039e85152c4d0f31d83fa70edc4aba088)
+- [ObjectCXR](https://academictorrents.com/details/fdc91f11d7010f7259a05403fc9d00079a09f5d5)
 
 Please unpack the downloaded files and adjust the paths in the `config.yml` file 
 accordingly. `NUM_WORKERS` specifies the number of parallel processes for preprocessing.
 Ideally this should correspond to the number of your available CPU-cores.
 `MACHEX_PATH` is the directory, where MaCheX will be saved.
+If it is desired to only collect frontal scans, set `FRONTAL_ONLY` to `true`.
 
-For the pre-processing the install of a few packages may be necessary, which is
+At this point we would like to mention and appreciate the [TorchXRayVision](https://github.com/mlmed/torchxrayvision)
+project, which also targets to provide an interface to chest X-ray datasets.
+The download links for `RSNA`, `OpenI`, `SIIM-ACR` and `ObjectCXR` were obtained from
+their packages' documentation. Check them out as well!
+
+For the pre-processing the installation of a few packages may be necessary, which is
 preferably done in a virtual environment:
 
 ```shell
