@@ -10,6 +10,11 @@ MaCheX is a composition of mutliple public chest radiography datasets. In this v
 - MIMIC-CXR
 - VinDr-CXR
 - BRAX
+- RSNA Pneumonia Detection Challenge
+- OpenI
+- SIIM-ACR
+- ObjectCXR
+
 
 All in all, the full final dataset amounts to around 930,000 chest x-rays in 
 1024x1024px resolution.
